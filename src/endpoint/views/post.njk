@@ -1,0 +1,7 @@
+{% extends "partials/base.njk" %}
+
+{% block body %}
+  <article class="post">
+    {{ item.content | md }}
+  </article>
+{% endblock %}

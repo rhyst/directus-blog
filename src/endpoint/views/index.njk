@@ -1,0 +1,58 @@
+{% extends "partials/base.njk" %}
+
+{% block body %}
+  <section class="posts">
+
+    {% for item in items %}
+      <article class="post">
+        <h4 class="post-header">
+          <a href="{{ config.baseUrl }}/posts/{{ item.slug }}">
+            <span class="post-date">{{ item.date }}</span>{{ item.name }}</a>
+        </h4>
+        <p>{{ item.summary | md }}</p>
+        <p>
+          <a href="{{ config.baseUrl }}/posts/{{ item.slug }}">More</a>
+          {% for category in item.categories %}
+            <span class="post-category category-{{ category.name }}">
+              <a href="">{{ category.name }}</a>
+            </span>
+          {% endfor %}
+        </p>
+      </article>
+    {% else %}
+      <p>No posts</p>
+    {% endfor %}
+
+    {% if items.length %}
+      <ul class="pagination">
+        {% if page !== 1 %}
+          <li class="page-item">
+            <a href="{{ config.baseUrl }}/1" class="page-link" aria-label="First">
+              <span>««</span>
+            </a>
+          </li>
+          <li class="page-item">
+            <a href="{{ config.baseUrl }}/{{ page - 1 }}" class="page-link" aria-label="Previous">
+              <span>«</span>
+            </a>
+          </li>
+        {% endif %}
+        <li class="page-item">
+          {{ page }}/{{ total_pages }}
+        </li>
+        {% if page !== total_pages and total_pages !== 1 %}
+          <li class="page-item">
+            <a href="{{ config.baseUrl }}/{{ page + 1 }}" class="page-link" aria-label="Next">
+              <span>»</span>
+            </a>
+          </li>
+          <li class="page-item">
+            <a href="{{ config.baseUrl }}/{{ total_pages }}" class="page-link" aria-label="Last">
+              <span>»»</span>
+            </a>
+          </li>
+        {% endif %}
+      </ul>
+    {% endif %}
+  </section>
+{% endblock %}
