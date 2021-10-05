@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>{{ config.baseUrl }}</id>
+  <title>{{ config.title }}</title>
+  <link href="{{ config.baseUrl }}"/>
+  <link href="{{ config.baseUrl }}/index.xml" rel="self" type="application/rss+xml"/>
+  <updated>{{ items[0].date | rssdate }}</updated>
+  <author>
+    <name>{{ config.authorName }}</name>
+    <email>{{ config.authorEmail }}</email>
+  </author>
+  {% for item in items %}
+    <entry>
+      <title>{{ item.name }}</title>
+      <link href="{{ config.baseUrl }}/posts/{{ item.slug }}"/>
+      <id>{{ config.baseUrl }}/posts/{{ item.slug }}</id>
+      <updated>{{ item.date | rssdate }}</updated>
+      <summary>{{ item.summary }}</summary>
+      <content type="html">{{ item.content | md }}</content>
+    </entry>
+  {% endfor %}
+</feed>

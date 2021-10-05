@@ -1,0 +1,11 @@
+{
+  "name": "fsevents",
+  "version": "2.3.2",
+  "license": "MIT",
+  "engines": {
+    "node": ">=8"
+  },
+  "files": [
+    "index.js"
+  ]
+}

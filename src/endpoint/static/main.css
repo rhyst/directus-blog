@@ -1,0 +1,21 @@
+body,
+html {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  font-family: sans;
+  width: 600px;
+  margin: auto;
+  position: relative;
+}
+
+body > ul {
+  padding: 0;
+}
