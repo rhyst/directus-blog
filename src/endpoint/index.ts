@@ -11,8 +11,6 @@ import compression from "compression";
 const converter = new showdown.Converter();
 const config = require("./config");
 
-// Utility functions
-
 const min = (content) =>
   config.minify
     ? minify(content, {
@@ -26,16 +24,21 @@ const min = (content) =>
       })
     : content;
 
-const log = (text: string) => {
+const log = (text: string, object?: any, emoji: string = "📜") => {
   const now = new Date();
   console.log(
     `${("0" + now.getHours()).slice(-2)}:${("0" + now.getMinutes()).slice(
       -2
     )}:${("0" + now.getSeconds()).slice(
       -2
-    )} 📜 ${text[0].toUpperCase()}${text.slice(1)}`
+    )} ${emoji} ${text[0].toUpperCase()}${text.slice(1)}`
   );
+  if (object) {
+    console.log(object);
+  }
 };
+
+const error = (text: string, object?: any) => log(text, object, "🚨");
 
 type Endpoint = ReturnType<typeof defineEndpoint>;
 
@@ -45,64 +48,68 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
   const { ItemsService, MetaService, AuthenticationService } = services;
   const schema = await getSchema();
   const itemService = new ItemsService(config.collection, { schema });
-  const metaService = new MetaService({
-    schema,
-    accountability: { admin: true },
-  });
 
   // RENDERING
 
-  const renderIndex = async (page?: number) => {
+  const renderIndex = async (page: number | typeof NaN, tag?: string) => {
     const limit = 10;
-    const { filter_count } = await metaService.getMetaForQuery(
-      config.collection,
-      {
-        fields: ["id"],
-        filter: config.indexFilter,
-        meta: ["filter_count"],
-      }
-    );
-    const totalPages = Math.ceil(filter_count / limit);
-
-    const renderPage = async (page) => {
-      log(`Rendering index page ${page}`);
-      const query = {
-        limit,
-        page,
-        sort: [{ column: "date", order: "desc" }],
-        fields: config.indexFields,
-        filter: config.indexFilter,
-      };
-      const items = await itemService.readByQuery(query);
-      const body = min(
-        nunjucks.render("index.njk", {
-          items,
-          page,
-          total_pages: totalPages,
-          config,
-        })
-      );
-      mcache.put(`index-${page}`, body);
-      return body;
-    };
-    if (page) {
-      return renderPage(page);
-    } else {
-      Array(totalPages)
-        .fill(0)
-        .map((a, i) => renderPage(i + 1));
+    const allItems = await itemService.readByQuery({
+      sort: [{ column: "date", order: "desc" }],
+      fields: ["id", "tags"],
+      filter: {
+        ...config.index.filter,
+        ...(tag ? { tags: { _contains: tag } } : {}),
+      },
+    });
+    const totalPages = Math.ceil(allItems.length / limit);
+    if (isNaN(page) || page > totalPages) {
+      return null;
     }
+    const tags = [];
+    allItems.forEach((i) =>
+      i.tags.forEach((tag) => {
+        if (!tags.includes(tag)) {
+          tags.push(tag);
+        }
+      })
+    );
+    tags.sort();
+
+    log(`Rendering index page ${page}`);
+    const query = {
+      limit,
+      page,
+      sort: [{ column: "date", order: "desc" }],
+      fields: config.index.fields,
+      filter: {
+        ...config.index.filter,
+        ...(tag ? { tags: { _contains: tag } } : {}),
+      },
+    };
+    const items = await itemService.readByQuery(query);
+    const body = min(
+      nunjucks.render(config.index.view, {
+        items,
+        tag,
+        tags,
+        page,
+        total_pages: totalPages,
+        config,
+      })
+    );
+    mcache.put(tag ? `index-${tag}-${page}` : `index-${page}`, body);
+    return body;
   };
 
   const renderRss = async () => {
     log(`Rendering rss feed`);
     const query = {
       sort: [{ column: "date", order: "desc" }],
-      fields: config.indexFields,
-      filter: config.indexFilter,
+      fields: config.rss.fields,
+      filter: config.rss.filter,
     };
     const items = await itemService.readByQuery(query);
-    const body = nunjucks.render("rss.njk", {
+    const body = nunjucks.render(config.rss.view, {
       items,
       config,
     });
@@ -112,36 +119,47 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
 
   const renderItem = async (slug?: string) => {
     log(`Rendering item ${slug}`);
-    try {
-      const query = {
-        limit: 1,
-        fields: config.itemFields,
-        filter: config.itemFilter(slug),
-      };
-      const item = (await itemService.readByQuery(query))[0];
-      config?.beforeRender(item, { schema, services });
-      const body = min(
-        nunjucks.render("item.njk", {
-          item,
-          config,
-        })
-      );
-      mcache.put(slug, body);
-      return body;
-    } catch (e) {
-      console.error(e);
-      return "woops";
+    const query = {
+      limit: 1,
+      fields: config.item.fields,
+      filter: config.item.filter(slug),
+    };
+    let item = (await itemService.readByQuery(query))?.[0];
+    if (!item) {
+      return null;
     }
+    config?.item?.beforeRender(item, { schema, services });
+    const body = min(
+      nunjucks.render(config.item.view, {
+        item,
+        config,
+      })
+    );
+    mcache.put(slug, body);
+    return body;
   };
 
   const renderItems = async () => {
     const query = {
       sort: [{ column: "date", order: "desc" }],
-      fields: ["slug"],
-      filter: config.itemFilter(),
+      fields: [config.item.slugField],
+      filter: config.item.filter(),
     };
     const items = await itemService.readByQuery(query);
-    items.map((item) => renderItem(item.slug));
+    items.map((item) => renderItem(item[config.item.slugField]));
+  };
+
+  const renderIndexes = async () => {
+    const limit = 10;
+    const allItems = await itemService.readByQuery({
+      sort: [{ column: "date", order: "desc" }],
+      fields: ["id", "tags"],
+      filter: config.index.filter,
+    });
+    const totalPages = Math.ceil(allItems.length / limit);
+    Array(totalPages)
+      .fill(0)
+      .map((a, i) => renderIndex(i + 1));
   };
 
   // NUNJUCKS
@@ -163,12 +181,12 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
   // CACHING
 
   log("Warming caches");
-  renderIndex();
+  renderIndexes();
   renderRss();
   renderItems();
 
   const invalidateCache = (key?: string) => {
-    renderIndex();
+    renderIndexes();
     renderRss();
     if (key) {
       renderItem(key);
@@ -187,11 +205,14 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
       });
       const item = await service.readOne(key);
       // Ensure published items have a slug
-      let slug = item.slug;
-      if (item.published && item.name && !item.slug) {
+      const slugField = config.item.slugField;
+      let slug = item[slugField];
+      if (item.published && item.name && !slug) {
         slug = slugify(`${item.date}-${item.name}`, { lower: true });
-        await service.updateOne(key, { slug });
-        console.log(`Updated slug of ${context.collection} ${key} to ${slug}`);
+        await service.updateOne(key, { [slugField]: slug });
+        console.log(
+          `Updated slug (${slugField}) of ${context.collection} ${key} to ${slug}`
+        );
       }
       // Recreate cached outputs of changed items
       invalidateCache(slug);
@@ -235,41 +256,58 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
   // ROUTES
   router.use(compression());
 
+  router.use((req, res, next) => {
+    try {
+      next();
+    } catch (e) {
+      error(e);
+      res.send("woop");
+    }
+  });
+
   router.get("/index.xml", async (req, res) => {
-    try {
-      res.setHeader("content-type", "application/atom+xml");
-      return res.send(mcache.get("rss") || (await renderRss()));
-    } catch (e) {
-      console.error(e);
-      return res.send("woops");
-    }
+    res.setHeader("content-type", "application/atom+xml");
+    return res.send(mcache.get("rss") || (await renderRss()));
   });
 
-  router.get("/:page?", async (req, res) => {
-    try {
-      const page = Number(req.params.page) || 1;
-      return res.send(mcache.get(`index-${page}`) || (await renderIndex(page)));
-    } catch (e) {
-      console.error(e);
-      return res.send("woops");
+  router.get("/:page?", async (req, res, next) => {
+    const page = Number(req.params.page || 1);
+    const body = mcache.get(`index-${page}`) || (await renderIndex(page));
+    if (!body) {
+      return next();
     }
+    return res.send(body);
   });
 
-  router.get("/posts/:slug", async (req, res) => {
-    try {
-      return res.send(
-        mcache.get(req.params.slug) || (await renderItem(req.params.slug))
-      );
-    } catch (e) {
-      console.error(e);
-      return res.send("woops");
+  router.get("/tags/:tag/:page?", async (req, res, next) => {
+    const page = Number(req.params.page || 1);
+    const tag = req.params.tag;
+    const body =
+      mcache.get(`index-${tag}-${page}`) || (await renderIndex(page, tag));
+    if (!body) {
+      return next();
     }
+    return res.send(body);
+  });
+
+  router.get("/posts/:slug", async (req, res, next) => {
+    const body =
+      mcache.get(req.params.slug) || (await renderItem(req.params.slug));
+    if (!body) {
+      return next();
+    }
+    return res.send(body);
   });
 
   router.use("/static", expressStatic(path.join(__dirname, "static")));
 
   router.use(function (req, res, next) {
-    res.status(404).send("Not found");
+    error("Page not found", req.params);
+    res.status(404).send(
+      nunjucks.render(config["404"].view, {
+        config,
+      })
+    );
   });
 
   log(`${config.extensionName} extension ready`);

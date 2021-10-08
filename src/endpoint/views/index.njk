@@ -12,9 +12,9 @@
         <p>{{ item.summary | md }}</p>
         <p>
           <a href="{{ config.baseUrl }}/posts/{{ item.slug }}">More</a>
-          {% for category in item.categories %}
-            <span class="post-category category-{{ category.name }}">
-              <a href="">{{ category.name }}</a>
+          {% for tag in item.tags %}
+            <span class="tag tag-{{ tag }}">
+              <a href="{{ config.baseUrl }}/tags/{{ tag }}">{{ tag }}</a>
             </span>
           {% endfor %}
         </p>
@@ -25,33 +25,29 @@
 
     {% if items.length %}
       <ul class="pagination">
-        {% if page !== 1 %}
-          <li class="page-item">
-            <a href="{{ config.baseUrl }}/1" class="page-link" aria-label="First">
-              <span>««</span>
-            </a>
-          </li>
-          <li class="page-item">
-            <a href="{{ config.baseUrl }}/{{ page - 1 }}" class="page-link" aria-label="Previous">
-              <span>«</span>
-            </a>
-          </li>
-        {% endif %}
+        <li class="{{ 'hide' if page === 1 else '' }}">
+          <a href="{{ config.baseUrl }}/1" class="page-link" aria-label="First">
+            <span>««</span>
+          </a>
+        </li>
+        <li class="{{ 'hide' if page === 1 else '' }}">
+          <a href="{{ config.baseUrl }}/{{ page - 1 }}" class="page-link" aria-label="Previous">
+            <span>«</span>
+          </a>
+        </li>
         <li class="page-item">
           {{ page }}/{{ total_pages }}
         </li>
-        {% if page !== total_pages and total_pages !== 1 %}
-          <li class="page-item">
-            <a href="{{ config.baseUrl }}/{{ page + 1 }}" class="page-link" aria-label="Next">
-              <span>»</span>
-            </a>
-          </li>
-          <li class="page-item">
-            <a href="{{ config.baseUrl }}/{{ total_pages }}" class="page-link" aria-label="Last">
-              <span>»»</span>
-            </a>
-          </li>
-        {% endif %}
+        <li class="{{ 'hide' if page !== total_pages and total_pages !== 1  else '' }}">
+          <a href="{{ config.baseUrl }}/{{ page + 1 }}" class="page-link" aria-label="Next">
+            <span>»</span>
+          </a>
+        </li>
+        <li class="{{ 'hide' if page !== total_pages and total_pages !== 1  else '' }}">
+          <a href="{{ config.baseUrl }}/{{ total_pages }}" class="page-link" aria-label="Last">
+            <span>»»</span>
+          </a>
+        </li>
       </ul>
     {% endif %}
   </section>
