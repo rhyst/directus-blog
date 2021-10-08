@@ -19,3 +19,7 @@ body {
 body > ul {
   padding: 0;
 }
+
+.hide {
+  visibility: hidden;
+}
