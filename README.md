@@ -6,43 +6,52 @@ A directus extension to add a blog endpoint. It aims to be simple to configure f
 
 ### Install
 
-Install the extension by copying `dist/endpoints/blog` to the directus extensions folder `<directus_root>/extensions/endpoints/blog` and copying `dist/hooks/blog` to `<directus_root>/extensions/hooks/blog`
+Install the extension by copying the release files to your directus extensions folders and renaming them:
 
-Configure the extension by copying `config.js` to the directus extensions folder `<directus_root>/extensions/endpoints/blog/config.js`. See the config file for information on the different options.
+- Copy `endpoint.js` to `<directus_root>/extensions/endpoints/blog/index.js`
+- Copy `config.js` to `<directus_root>/extensions/endpoints/blog/config.js`
+- Copy `hooks.js` to `<directus_root>/extensions/hooks/blog/index.js`
 
-Then you can visit `<directusUrl>/blog` to see your blog.
+Then restart directus.
+
+By default the blog will be available at `<directus_url>/blog` but you may need to configure the extension first.
 
 ### Configure
 
 Configuration is done in `config.js`. The options are:
 
-- `extensionName` - The name os the extension. This must match the name of the directory the extension is in. Default: `blog`
-- `baseUrl` - The base url of the website. This will be `<directus_url>/blog` unless you have other routing in place. The config example should be changed to a full url. Default `/blog`
-- `staticUrl` - The url to serve static assets at. Default `/static`
-- `staticDir` - The directory to serve static assets from. Default `__dirname/static`
-- `baseUrl` - The base url of the website. This will be `<directus_url>/blog` unless you have other routing in place. The config example should be changed to a full url. Default `/blog`
-- `collection` - The directus collection to source items from. Can be overwritten in each route config. Default: `post`.
-- `routes` - An array of route configurations which can have the following options:
-  - `view` - The nunjucks template
-  - `url` - An express js style url path (or array of them) that should route to the view. Any `:params` will be used as filters in the directus query.
-  - `limit` - Limit results from directus query. Default `-1` (unlimited)
-  - `sort` - Sort config for directus query. Default `[{ column: "date", order: "desc" }]`
-  - `fields` - Fields to return from directus query. Default `['*']` (all fields)
-  - `filters` - Additional static filters to use in the directus query.
-  - `filter` - Complete replace the default filter query.
-  - `auth` - Require a valid directus login cookie to view this route.
-  - `minify` - Disable html minification by setting this to false. Default: `true`
-  - `beforeQuery` - Callback before a directus query is made to modify the query if necessary.
-  - `beforeRender` - Callback before nunjucks rendering to modify the item data if necessary.
-  - `beforeResponse` - Callback before express response to modify the response if necessary.
-  - `*` These and any custom properties will be passed to the template when rendering this route.
-- `notFound` - Route configuration for the 404 page with the following options:
-  - `view` - The nunjucks template
-- `hooks` - A map of directus hook functons.
-- `cache` - Disable caching by setting this to false. Default: `true`
-- `pageParam` - Set the paramter that is treated as the enumerable page parameter. Default: `page`
-- `nunjucks` - Callback to allow modifying the nunjucks environment.
-- `*` These and any custom properties will be passed to all route templates.
+| Option          | Type                                      | Default              | Description                                                                                                                                                 |
+| --------------- | ----------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extensionName` | `string`                                  | `'blog'`             | The name os the extension. This must match the name of the directory the extension is in.                                                                   |
+| `baseUrl`       | `string`                                  | `'/blog'`            | The base url of the website. This will be `<directus_url>/blog` unless you have other routing in place. The config example should be changed to a full url. |
+| `staticUrl`     | `string`                                  | `'/static'`          | The url to serve static assets at.                                                                                                                          |
+| `staticDir`     | `string`                                  | `'<dirname>/static'` | The directory to serve static assets from.                                                                                                                  |
+| `collection`    | `string`                                  | `'post'`             | The directus collection to source items from. Can be overwritten in each route config                                                                       |
+| `routes`        | `RouteConfig[]`                           |                      | An array of route configurations. See below for the configuration options.                                                                                  |
+| `notFound`      | `RouteConfig`                             |                      | Route configuration for the 404 page.                                                                                                                       |
+| `hooks`         | `{ [hookKey: string]: function }`         |                      | A map of directus hook functions                                                                                                                            |
+| `cache`         | `boolean`                                 | `true`               | Disable caching by setting this to false.                                                                                                                   |
+| `pageParam`     | `string`                                  | `'page'`             | Set the paramter that is treated as the numeric page parameter                                                                                              |
+| `nunjucks`      | `(nunjucks, nunjucksEnv, config) => void` |                      | Callback to allow modifying the nunjucks environment                                                                                                        |
+| `*`             | `*`                                       |                      | The entire config object (including custom properties) is passed to templates                                                                               |
+
+| Option           | Type                                           | Default                               | Description                                                                                                                                                                             |
+| ---------------- | ---------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `view`           | `string`                                       |                                       | The nunjucks template                                                                                                                                                                   |
+| `url`            | `string`                                       |                                       | An express js style url path (or array of them) that should route to the view. Any `:params` will be used as filters in the directus query. See filtering section for more information. |
+| `limit`          | `number`                                       | `-1`                                  | Limit results from directus query                                                                                                                                                       |
+| `sort`           | `{ column: string; order: "desc" \| "asc" }[]` | `[{ column: "date", order: "desc" }]` | Sort config for directus query                                                                                                                                                          |
+| `fields`         | `string[]`                                     | `['*']`                               | Fields to return from directus query                                                                                                                                                    |
+| `filters`        | `Directus filter object`                       |                                       | Additional static filters to use in the directus query.                                                                                                                                 |
+| `filter`         | `req => Directus filter object`                |                                       | Complete replace the default filter query                                                                                                                                               |
+| `auth`           | `boolean`                                      | `false`                               | Require a valid directus login cookie to view this route.                                                                                                                               |
+| `minify`         | `boolean`                                      | `true`                                | Disable html minification by setting this to false                                                                                                                                      |
+| `beforeQuery`    | `(query, req) => void`                         |                                       | Callback before a directus query is made to modify the query if necessary                                                                                                               |
+| `beforeRender`   | `(items, req) => void`                         |                                       | Callback before nunjucks rendering to modify the item data if necessary.                                                                                                                |
+| `beforeResponse` | `(req, res) => void`                           |                                       | Callback before express response to modify the response if necessary.                                                                                                                   |
+| `*`              | `*`                                            |                                       | The route config object (including custom properties) is passed to templates                                                                                                            |
+
+After any configuration change it is necessary to restart directus (there is no way to reload just the extension yet).
 
 ### Filtering
 
