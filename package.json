@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "docker run -p 8055:8055 -v $PWD/db:/directus/database -v $PWD/dist/endpoints:/directus/extensions/endpoints -v $PWD/dist/hooks:/directus/extensions/hooks -e KEY=test -e SECRET=test -e ADMIN_EMAIL=admin@example.com -e ADMIN_PASSWORD=d1r3ctu5 directus/directus",
+    "start": "docker run --rm --name directus -p 8055:8055 -v $PWD/db:/directus/database -v $PWD/dist/endpoints:/directus/extensions/endpoints -v $PWD/dist/hooks:/directus/extensions/hooks -e KEY=test -e SECRET=test -e ADMIN_EMAIL=admin@example.com -e ADMIN_PASSWORD=d1r3ctu5 directus/directus",
     "build": "rollup -c",
     "watch": "rollup -c -w"
   },
@@ -16,6 +16,7 @@
     "html-minifier-terser": "^5.1.1",
     "memory-cache": "^0.2.0",
     "nunjucks": "^3.2.3",
+    "path-to-regexp": "^6.2.0",
     "showdown": "^1.9.1",
     "slugify": "^1.6.0"
   },
@@ -29,6 +30,7 @@
     "@types/html-minifier-terser": "^6.0.0",
     "@types/memory-cache": "^0.2.1",
     "@types/nunjucks": "^3.2.0",
+    "@types/path-to-regexp": "^1.7.0",
     "@types/showdown": "^1.9.4",
     "chokidar": "^3.5.2",
     "fast-glob": "^3.2.7",
