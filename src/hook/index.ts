@@ -18,7 +18,6 @@ const hook: Hook = () => {
   return {
     "items.create": (...args) => global.hooks?.["items.create"]?.(...args),
     "items.update": (...args) => global.hooks?.["items.update"]?.(...args),
-    "cron(0 0 * * sun)": (...args) => global.hooks?.["weekly"]?.(...args),
   };
 };
 

@@ -1,6 +1,6 @@
 # Directus Blog Extension
 
-A directus extension to add a simple blog endpoint.
+A directus extension to add a blog endpoint. It aims to be simple to configure for most personal blog use cases.
 
 ## Usage
 
@@ -14,27 +14,137 @@ Then you can visit `<directusUrl>/blog` to see your blog.
 
 ### Configure
 
-**Data**
+Configuration is done in `config.js`. The options are:
 
-By default the extension expects to find a `post` collection with `date`, `name`, `summary`, `content`, `slug`, `indexed`, and `published` as fields. These are all configurable.
+- `extensionName` - The name os the extension. This must match the name of the directory the extension is in. Default: `blog`
+- `baseUrl` - The base url of the website. This will be `<directus_url>/blog` unless you have other routing in place. The config example should be changed to a full url. Default `/blog`
+- `staticUrl` - The url to serve static assets at. Default `/static`
+- `staticDir` - The directory to serve static assets from. Default `__dirname/static`
+- `baseUrl` - The base url of the website. This will be `<directus_url>/blog` unless you have other routing in place. The config example should be changed to a full url. Default `/blog`
+- `collection` - The directus collection to source items from. Can be overwritten in each route config. Default: `post`.
+- `routes` - An array of route configurations which can have the following options:
+  - `view` - The nunjucks template
+  - `url` - An express js style url path (or array of them) that should route to the view. Any `:params` will be used as filters in the directus query.
+  - `limit` - Limit results from directus query. Default `-1` (unlimited)
+  - `sort` - Sort config for directus query. Default `[{ column: "date", order: "desc" }]`
+  - `fields` - Fields to return from directus query. Default `['*']` (all fields)
+  - `filters` - Additional static filters to use in the directus query.
+  - `filter` - Complete replace the default filter query.
+  - `auth` - Require a valid directus login cookie to view this route.
+  - `minify` - Disable html minification by setting this to false. Default: `true`
+  - `beforeQuery` - Callback before a directus query is made to modify the query if necessary.
+  - `beforeRender` - Callback before nunjucks rendering to modify the item data if necessary.
+  - `beforeResponse` - Callback before express response to modify the response if necessary.
+  - `*` These and any custom properties will be passed to the template when rendering this route.
+- `notFound` - Route configuration for the 404 page with the following options:
+  - `view` - The nunjucks template
+- `hooks` - A map of directus hook functons.
+- `cache` - Disable caching by setting this to false. Default: `true`
+- `pageParam` - Set the paramter that is treated as the enumerable page parameter. Default: `page`
+- `nunjucks` - Callback to allow modifying the nunjucks environment.
+- `*` These and any custom properties will be passed to all route templates.
 
-You can alter `config.collection` to change which collection is used as a source of blog posts. You can change `config.indexFields` and `config.itemFields` to determine which fields are selected and passed to the views.
+### Filtering
 
-You can alter `config.indexFilter` and `config.itemFilter` to change what posts each view is allowed to display.
+The default behaviour of this extension is to use the params in the url as filters when querying the directus items.
 
-**Views**
+For example for a route `/posts/:slug` which matches the url `/posts/my-cool-post` the directus filter will be:
 
-The view is rendered from `nunjucks` templates. With the exception of the `slug` field the other fields are passed straight to the templates as a `post` object, so if the selected fields are updated then the `nunjucks` templates should be updated too.
+```
+{
+    slug: { "_eq": "my-cool-post" }
+}
+```
 
-There are three views built in `views/index.njk`, `views/post.njk` and `views/rss.njk`. The index and rss views will show a list of your blog posts. The post view will show a single blog post based on matching the `slug` parameter from the url.
+This will work for any number of parameters. For example for a route `/posts/:category/:title` which matches the url `/posts/my-category/an-article` the directus filter will be:
 
-There is an `md` custom `nunjucks` filter built in that converts markdown to html and additionally allows you to use `nunjucks` syntax within your content.
+```
+{
+    category: { "_eq": "my-category" },
+    title: { "_eq": "an-article" },
+}
+```
 
-To add additional custom filters you can use the `config.nunjucks` function which provides access to the `nunjucks` environment.
+You can also specify the operator to use with modified express syntax. If you have items with an array field (i.e. posts with a tags fields) then you can specify to use `_contains` to match any of the items in the list. For example for a route `/tags/:tag_contains` which matches the url `/tags/my-cool-tag` the directus filter will be:
 
-**Caching**
+```
+{
+    tag: { "_contains": "my-cool-post" }
 
-The endpoint caches all responses. Editing post items triggers the cached items to be rebuilt.
+}
+```
+
+Any parameter of the format `<field>_<operator>` will be split this way and you can use any directus filter operator (though it may not produce sensible results).
+
+### Pagination
+
+The page parameter is the one special that will not be used as a filter. By default it is `page` but this can be changed in the config.
+
+This parameter will be used to specify the page in the directus query. For example if you have a route config like this:
+
+```
+{
+    view: "index.njk",
+    url: "/:page(\\d{0,})",
+    limit: 10,
+},
+```
+
+which matches on the url `/3` then the directus query will look like this:
+
+```
+{
+    limit: 10,
+    page: 3,
+}
+```
+
+This works with other filters as well. For example if you have a route config like this:
+
+```
+{
+    view: "index.njk",
+    url: "/tags/:tag_contains/:page(\\d{0,})",
+    limit: 10,
+}
+```
+
+which matches on the url `/tags/coding/4` then the directus query will look like this:
+
+```
+{
+    limit: 10,
+    page: 4,
+    filter: {
+        tag: { '_contains': 'coding' }
+    }
+}
+```
+
+The slightly strange looking format `:page(\\d{0,})` is just express syntax that means page must be numerical digits or empty. This ensures that navigating to string paths will correctly 404.
+
+### Caching
+
+The extension will cache all pages. It caches them on startup, if a page is hit that does not have a cache, and when an item is created or edited.
+
+It does a reverse match to work out what pages can exist i.e. it combines the route configs and the items in the database to work out the possible urls that it should cache.
+
+This has a limitation that if pages depend on items that do not match that page (.e.g your item pages contain a list of all tags on your website) then they may not be rerended when the dependencies changes. In this case for now disabling the cache is the only option.
+
+### Templates
+
+The views are rendered nunjucks templates. The parameters available to each template are:
+
+- `config` - The full config object
+- `route` - The route config object for the route that is being rendered
+- `items` - The returned value of the directus query
+- `item` - A single item if a single item was returned from the directus query
+- `page` - The page number that was requested for this page
+- `totalPages` - The totalNumber of pages that the query produced
+
+All standard nunjucks filters and methods are available. In addition is the `md` filter which converts markdown to html (using showdown) and also allows you to use nunjucks within your content (which is acceptable for a personal blog but not for untrusted content).
+
+You can configure the nunjucks environment using the `config.nunjucks(nunjucksModules, nunjucksEnv, config)` callback.
 
 ## Development
 

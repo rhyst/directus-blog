@@ -7,22 +7,47 @@ import { defineEndpoint } from "@directus/extensions-sdk";
 import slugify from "slugify";
 import { minify } from "html-minifier-terser";
 import compression from "compression";
+import { parse, compile } from "path-to-regexp";
+
+type RouteConfig = {
+  url: string;
+  view: string;
+  collection?: string;
+  limit?: number;
+  sort?: { column: string; order: "desc" | "asc" }[];
+  fields?: string[];
+  filters?: Record<string, unknown>;
+  filter?: (req: Express.Request) => Record<string, unknown>;
+  minify?: boolean;
+  // events
+  beforeQuery?: (query: Record<string, unknown>, req: Express.Request) => void;
+  beforeRender?: (item: Record<string, unknown>, req: Express.Request) => void;
+  beforeResponse?: (
+    body: string,
+    req: Express.Request,
+    res: Express.Response
+  ) => void;
+  [key: string]: unknown;
+};
+
+type Config = {
+  extensionName: string;
+  baseUrl: string;
+  staticUrl?: string;
+  staticDir?: string;
+  collection?: string;
+  nunjucks?: (nunjucks, env, config: Config) => void;
+  routes: RouteConfig[];
+  notFound: RouteConfig;
+  hooks: Record<string, () => void>[];
+  cache: boolean;
+  pageParam: string;
+  [key: string]: unknown;
+};
+
+type Endpoint = ReturnType<typeof defineEndpoint>;
 
 const converter = new showdown.Converter();
-const config = require("./config");
-
-const min = (content) =>
-  config.minify
-    ? minify(content, {
-        collapseBooleanAttributes: true,
-        collapseWhitespace: true,
-        minifyCSS: true,
-        minifyJS: true,
-        removeAttributeQuotes: true,
-        removeComments: true,
-        removeEmptyAttributes: true,
-      })
-    : content;
 
 const log = (text: string, object?: any, emoji: string = "📜") => {
   const now = new Date();
@@ -40,131 +65,92 @@ const log = (text: string, object?: any, emoji: string = "📜") => {
 
 const error = (text: string, object?: any) => log(text, object, "🚨");
 
-type Endpoint = ReturnType<typeof defineEndpoint>;
-
-const endpoint: Endpoint = async (router, { services, getSchema }) => {
+const endpoint: Endpoint = async (router, extensionContext) => {
+  const config = (await require("./config")(router, extensionContext, {
+    slugify,
+  })) as Config;
   log(`${config.extensionName} extension loading`);
+  const pageParam = config.pageParam || "page";
 
-  const { ItemsService, MetaService, AuthenticationService } = services;
-  const schema = await getSchema();
-  const itemService = new ItemsService(config.collection, { schema });
+  const { ItemsService, MetaService, AuthenticationService } =
+    extensionContext.services;
+  const schema = await extensionContext.getSchema();
+  const metaService = new MetaService({
+    schema,
+    accountability: { admin: true },
+  });
+
+  // COMMON
+
+  const getFilters = (route, params) => ({
+    ...(route.filters || {}),
+    ...Object.entries(params).reduce((filter, [key, value]) => {
+      const field = key.split("_")[0];
+      const match = key.split("_")[1];
+      if (field === pageParam) return filter;
+      return { ...filter, [field]: { [`_${match || "eq"}`]: value } };
+    }, {}),
+  });
+
+  const min = (route: RouteConfig, content: string) =>
+    route.minify !== false
+      ? minify(content, {
+          collapseBooleanAttributes: true,
+          collapseWhitespace: true,
+          minifyCSS: true,
+          minifyJS: true,
+          removeAttributeQuotes: true,
+          removeComments: true,
+          removeEmptyAttributes: true,
+        })
+      : content;
 
   // RENDERING
 
-  const renderIndex = async (page: number | typeof NaN, tag?: string) => {
-    const limit = 10;
-    const allItems = await itemService.readByQuery({
-      sort: [{ column: "date", order: "desc" }],
-      fields: ["id", "tags"],
-      filter: {
-        ...config.index.filter,
-        ...(tag ? { tags: { _contains: tag } } : {}),
-      },
-    });
-    const totalPages = Math.ceil(allItems.length / limit);
-    if (isNaN(page) || page > totalPages) {
-      return null;
-    }
-    const tags = [];
-    allItems.forEach((i) =>
-      i.tags.forEach((tag) => {
-        if (!tags.includes(tag)) {
-          tags.push(tag);
-        }
-      })
-    );
-    tags.sort();
-
-    log(`Rendering index page ${page}`);
+  const render = async (route: RouteConfig, req) => {
+    log(`Rendering ${req.url}`);
+    const collection = route.collection || config.collection;
+    const itemService = new ItemsService(collection, { schema });
+    const page = req.params[pageParam] || 1;
     const query = {
-      limit,
+      limit: route.limit || -1,
+      sort: route.sort || [{ column: "date", order: "desc" }],
+      fields: route.fields ? route.fields : ["*"],
       page,
-      sort: [{ column: "date", order: "desc" }],
-      fields: config.index.fields,
-      filter: {
-        ...config.index.filter,
-        ...(tag ? { tags: { _contains: tag } } : {}),
-      },
+      filter: route.filter?.(req) || getFilters(route, req.params),
     };
-    const items = await itemService.readByQuery(query);
-    const body = min(
-      nunjucks.render(config.index.view, {
-        items,
-        tag,
-        tags,
-        page,
-        total_pages: totalPages,
-        config,
-      })
-    );
-    mcache.put(tag ? `index-${tag}-${page}` : `index-${page}`, body);
-    return body;
-  };
-
-  const renderRss = async () => {
-    log(`Rendering rss feed`);
-    const query = {
-      sort: [{ column: "date", order: "desc" }],
-      fields: config.rss.fields,
-      filter: config.rss.filter,
-    };
-    const items = await itemService.readByQuery(query);
-    const body = nunjucks.render(config.rss.view, {
-      items,
-      config,
+    route.beforeQuery?.(query, req);
+    let { filter_count } = await metaService.getMetaForQuery(collection, {
+      ...query,
+      meta: ["filter_count"],
     });
-    mcache.put("rss", body);
-    return body;
-  };
-
-  const renderItem = async (slug?: string) => {
-    log(`Rendering item ${slug}`);
-    const query = {
-      limit: 1,
-      fields: config.item.fields,
-      filter: config.item.filter(slug),
-    };
-    let item = (await itemService.readByQuery(query))?.[0];
-    if (!item) {
+    const totalPages = Math.ceil(filter_count / (route.limit || -1));
+    if (req.params[pageParam] && req.params[pageParam] > totalPages) {
       return null;
     }
-    config?.item?.beforeRender(item, { schema, services });
+    let items = await itemService.readByQuery(query);
+    if (!items?.length) return null;
+    route?.beforeRender?.(items, req);
+    const item = items.length === 1 ? items[0] : null;
     const body = min(
-      nunjucks.render(config.item.view, {
+      route,
+      nunjucks.render(route.view, {
         item,
+        items,
+        page,
+        totalPages,
         config,
+        route,
       })
     );
-    mcache.put(slug, body);
+    if (config.cache !== false) {
+      mcache.put(req.url, body);
+    }
     return body;
-  };
-
-  const renderItems = async () => {
-    const query = {
-      sort: [{ column: "date", order: "desc" }],
-      fields: [config.item.slugField],
-      filter: config.item.filter(),
-    };
-    const items = await itemService.readByQuery(query);
-    items.map((item) => renderItem(item[config.item.slugField]));
-  };
-
-  const renderIndexes = async () => {
-    const limit = 10;
-    const allItems = await itemService.readByQuery({
-      sort: [{ column: "date", order: "desc" }],
-      fields: ["id", "tags"],
-      filter: config.index.filter,
-    });
-    const totalPages = Math.ceil(allItems.length / limit);
-    Array(totalPages)
-      .fill(0)
-      .map((a, i) => renderIndex(i + 1));
   };
 
   // NUNJUCKS
 
-  // Set up nunjucks env
   const env = nunjucks.configure(path.join(__dirname, "views"));
   const safe = env.getFilter("safe");
   // Add default markdown conversion
@@ -176,82 +162,153 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
     "rssdate",
     (dateString) => new Date(dateString).toISOString().split(".")[0] + "Z"
   );
-  config.nunjucks(nunjucks, env, config);
+  config.nunjucks?.(nunjucks, env, config);
 
   // CACHING
 
-  log("Warming caches");
-  renderIndexes();
-  renderRss();
-  renderItems();
-
-  const invalidateCache = (key?: string) => {
-    renderIndexes();
-    renderRss();
-    if (key) {
-      renderItem(key);
-    } else {
-      renderItems();
-    }
-  };
-
-  // HOOKS
-  const onChange = async function (context) {
-    const schema = await getSchema();
-    const keys = Array.isArray(context.item) ? context.item : [context.item];
-    for (let key of keys) {
-      const service = new ItemsService(context.collection, {
-        schema,
-      });
-      const item = await service.readOne(key);
-      // Ensure published items have a slug
-      const slugField = config.item.slugField;
-      let slug = item[slugField];
-      if (item.published && item.name && !slug) {
-        slug = slugify(`${item.date}-${item.name}`, { lower: true });
-        await service.updateOne(key, { [slugField]: slug });
-        console.log(
-          `Updated slug (${slugField}) of ${context.collection} ${key} to ${slug}`
+  const getParamCombos = (
+    params: { key: string; values: string[] }[]
+  ): { [key: string]: string }[] => {
+    const f = (
+      params: { key: string; values: string[] }[]
+    ): { [key: string]: string }[] => {
+      if (params.length === 1) {
+        return params[0].values.map((val) => ({ [params[0].key]: val }));
+      }
+      for (let i = 0; i < params.length; i++) {
+        const urlPartials = f(params.slice(1));
+        return urlPartials.reduce(
+          (acc, curr) => [
+            ...acc,
+            ...params[i].values.map((val) => ({
+              ...curr,
+              [params[i].key]: val,
+            })),
+          ],
+          []
         );
       }
-      // Recreate cached outputs of changed items
-      invalidateCache(slug);
+      return [{}];
+    };
+    return f(params);
+  };
+
+  const renderRoute = async (route: RouteConfig, keys?: string[]) => {
+    try {
+      const collection = route.collection || config.collection;
+      const query = {
+        limit: -1,
+        fields: ["*"],
+        filter: route.filters || {},
+      };
+      const itemService = new ItemsService(collection, { schema });
+      const items = await (keys
+        ? itemService.readMany(keys, query)
+        : itemService.readByQuery(query));
+      const urls = Array.isArray(route.url) ? route.url : [route.url];
+      urls.forEach((urlPattern: string) => {
+        log(`Prerendering pages for ${urlPattern}`);
+        const params = parse(urlPattern).filter(
+          (p) => typeof p !== "string"
+        ) as {
+          name: string;
+        }[];
+        const values = params.map((p) => {
+          if (p.name === pageParam)
+            return { key: pageParam, values: ["__page__"] };
+          return {
+            key: p.name,
+            values: Array.from(
+              new Set(items.map((i) => i[p.name.replace(/_.*/, "")]).flat())
+            ) as string[],
+          };
+        });
+        const toString = compile(urlPattern);
+        getParamCombos(values).forEach(async (params) => {
+          if (params[pageParam]) {
+            let { filter_count } = await metaService.getMetaForQuery(
+              collection,
+              {
+                limit: route.limit || -1,
+                filter: getFilters(route, params),
+                meta: ["filter_count"],
+              }
+            );
+            const totalPages = Math.ceil(filter_count / (route.limit || -1));
+            for (let page = 1; page <= totalPages; page++) {
+              const paramsWithPage = { ...params, [pageParam]: page };
+              const url = toString(paramsWithPage);
+              render(route, { url, params: paramsWithPage });
+            }
+            params[pageParam] = "";
+          }
+          const url = toString(params);
+          render(route, { url, params });
+        });
+      });
+    } catch (e) {
+      error("Error during cache", e);
     }
   };
 
+  if (config.cache !== false) {
+    log("Warming caches");
+    config.routes.forEach((route) => renderRoute(route));
+  }
+
+  // HOOKS
+
+  const invalidateCache = async (context) => {
+    const keys = Array.isArray(context.item) ? context.item : [context.item];
+    config.routes.forEach((route) => {
+      const collection = route.collection || config.collection;
+      if (collection === context.collection) {
+        renderRoute(route, keys);
+      }
+    });
+  };
+
+  /**
+   * Uses provided hooks extension to integrate hooks into this extension
+   */
   global.hooks = {
-    "items.create": onChange,
-    "items.update": onChange,
-    weekly: () => {
-      log("Running weekly job");
-      invalidateCache();
+    ...(config.hooks || {}),
+    "items.create": async (context) => {
+      await config.hooks["items.create"]?.(context);
+      if (config.cache !== false) {
+        await invalidateCache(context);
+      }
+    },
+    "items.update": async (context) => {
+      await config.hooks["items.update"]?.(context);
+      if (config.cache !== false) {
+        await invalidateCache(context);
+      }
     },
   };
 
   // AUTH
-
-  // Auth on Directus
-  // router.use(async (req, res, next) => {
-  //   const schema = await getSchema();
-  //   // First check we are authed on directus
-  //   if (!req.cookies.directus_refresh_token) {
-  //     const authService = new AuthenticationService({ schema });
-  //     try {
-  //       const auth = await authService.refresh(
-  //         req.cookies.directus_refresh_token
-  //       );
-  //       res.cookie("directus_refresh_token", auth.refreshToken, {
-  //         maxAge: auth.expires,
-  //         httpOnly: true,
-  //       });
-  //       // @ts-expect-error
-  //       req.authed = true;
-  //     } catch (e) {
-  //       console.log(e);
-  //     }
-  //   }
-  //   next();
-  // });
+  const auth = (route) => async (req, res, next) => {
+    if (route.auth) {
+      // First check we are authed on directus
+      if (!req.cookies.directus_refresh_token) {
+        const authService = new AuthenticationService({ schema });
+        try {
+          const auth = await authService.refresh(
+            req.cookies.directus_refresh_token
+          );
+          res.cookie("directus_refresh_token", auth.refreshToken, {
+            maxAge: auth.expires,
+            httpOnly: true,
+          });
+          next();
+        } catch (e) {
+          return res.send(403);
+        }
+      }
+    }
+    next();
+  };
 
   // ROUTES
   router.use(compression());
@@ -261,56 +318,32 @@ const endpoint: Endpoint = async (router, { services, getSchema }) => {
       next();
     } catch (e) {
       error(e);
-      res.send("woop");
+      res.send("Error");
     }
   });
 
-  router.get("/index.xml", async (req, res) => {
-    res.setHeader("content-type", "application/atom+xml");
-    return res.send(mcache.get("rss") || (await renderRss()));
+  config.routes.forEach((route) => {
+    router.get(route.url, auth(route), async (req, res, next) => {
+      const body = mcache.get(req.url) || (await render(route, req));
+      route.beforeResponse?.(body, req, res);
+      if (!body) return next();
+      return res.send(body);
+    });
   });
 
-  router.get("/:page?", async (req, res, next) => {
-    const page = Number(req.params.page || 1);
-    const body = mcache.get(`index-${page}`) || (await renderIndex(page));
-    if (!body) {
-      return next();
-    }
-    return res.send(body);
-  });
+  router.use(
+    config.staticUrl || "/static",
+    expressStatic(config.staticDir || path.join(__dirname, "static"))
+  );
 
-  router.get("/tags/:tag/:page?", async (req, res, next) => {
-    const page = Number(req.params.page || 1);
-    const tag = req.params.tag;
-    const body =
-      mcache.get(`index-${tag}-${page}`) || (await renderIndex(page, tag));
-    if (!body) {
-      return next();
-    }
-    return res.send(body);
-  });
-
-  router.get("/posts/:slug", async (req, res, next) => {
-    const body =
-      mcache.get(req.params.slug) || (await renderItem(req.params.slug));
-    if (!body) {
-      return next();
-    }
-    return res.send(body);
-  });
-
-  router.use("/static", expressStatic(path.join(__dirname, "static")));
-
-  router.use(function (req, res, next) {
-    error("Page not found", req.params);
+  router.use((req, res, next) => {
+    error(`Page not found ${req.url}`);
     res.status(404).send(
-      nunjucks.render(config["404"].view, {
+      nunjucks.render(config.notFound.view, {
         config,
       })
     );
   });
-
-  log(`${config.extensionName} extension ready`);
 };
 
 export default endpoint;

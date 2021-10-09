@@ -36,15 +36,15 @@
           </a>
         </li>
         <li class="page-item">
-          {{ page }}/{{ total_pages }}
+          {{ page }}/{{ totalPages }}
         </li>
-        <li class="{{ 'hide' if page !== total_pages and total_pages !== 1  else '' }}">
+        <li class="{{ 'hide' if page !== totalPages and totalPages !== 1  else '' }}">
           <a href="{{ config.baseUrl }}/{{ page + 1 }}" class="page-link" aria-label="Next">
             <span>»</span>
           </a>
         </li>
-        <li class="{{ 'hide' if page !== total_pages and total_pages !== 1  else '' }}">
-          <a href="{{ config.baseUrl }}/{{ total_pages }}" class="page-link" aria-label="Last">
+        <li class="{{ 'hide' if page !== totalPages and totalPages !== 1  else '' }}">
+          <a href="{{ config.baseUrl }}/{{ totalPages }}" class="page-link" aria-label="Last">
             <span>»»</span>
           </a>
         </li>
