@@ -114,7 +114,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
     const page = req.params[pageParam] || 1;
     const query = {
       limit: route.limit || -1,
-      sort: route.sort || [{ column: "date", order: "desc" }],
+      sort: route.sort || ["-date"],
       fields: route.fields ? route.fields : ["*"],
       page,
       filter: route.filter?.(req) || getFilters(route, req.params),
