@@ -1,7 +1,3 @@
-import { defineHook } from "@directus/extensions-sdk";
-
-type Hook = ReturnType<typeof defineHook>;
-
 const log = (text: string) => {
   const now = new Date();
   console.log(
@@ -13,12 +9,9 @@ const log = (text: string) => {
   );
 };
 
-const hook: Hook = () => {
+const hook = (hooks): void => {
   log("setting up hooks");
-  return {
-    "items.create": (...args) => global.hooks?.["items.create"]?.(...args),
-    "items.update": (...args) => global.hooks?.["items.update"]?.(...args),
-  };
+  global.hooks = hooks;
 };
 
 export default hook;

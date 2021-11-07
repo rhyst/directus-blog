@@ -39,7 +39,7 @@ type Config = {
   nunjucks?: (nunjucks, env, config: Config) => void;
   routes: RouteConfig[];
   notFound: RouteConfig;
-  hooks: Record<string, () => void>[];
+  hooks: (hooks: { filter; action; init; schedule }) => void;
   cache: boolean;
   pageParam: string;
   [key: string]: unknown;
@@ -257,12 +257,11 @@ const endpoint: Endpoint = async (router, extensionContext) => {
   }
 
   // HOOKS
-
-  const invalidateCache = async (context) => {
-    const keys = Array.isArray(context.item) ? context.item : [context.item];
+  const invalidateCache = async (meta) => {
+    const keys = meta.keys || [meta.key];
     config.routes.forEach((route) => {
       const collection = route.collection || config.collection;
-      if (collection === context.collection) {
+      if (collection === meta.collection) {
         renderRoute(route, keys);
       }
     });
@@ -271,21 +270,20 @@ const endpoint: Endpoint = async (router, extensionContext) => {
   /**
    * Uses provided hooks extension to integrate hooks into this extension
    */
-  global.hooks = {
-    ...(config.hooks || {}),
-    "items.create": async (context) => {
-      await config.hooks["items.create"]?.(context);
-      if (config.cache !== false) {
-        await invalidateCache(context);
-      }
-    },
-    "items.update": async (context) => {
-      await config.hooks["items.update"]?.(context);
-      if (config.cache !== false) {
-        await invalidateCache(context);
-      }
-    },
-  };
+  config.hooks(global.hooks);
+
+  global.hooks.action("items.create", async (meta) => {
+    log("Item create hook received");
+    if (config.cache !== false) {
+      await invalidateCache(meta);
+    }
+  });
+  global.hooks.action("items.update", async (meta) => {
+    log("Item update hook received");
+    if (config.cache !== false) {
+      await invalidateCache(meta);
+    }
+  });
 
   // AUTH
   const auth = (route) => async (req, res, next) => {

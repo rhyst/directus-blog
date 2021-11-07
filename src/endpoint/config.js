@@ -5,11 +5,11 @@ const nunjucks = (nunjucks, env) => {
 module.exports = async (router, extensionContext, utils) => {
   const schema = await extensionContext.getSchema();
 
-  const slugify = async (context) => {
-    const keys = Array.isArray(context.item) ? context.item : [context.item];
+  const slugify = async (meta) => {
+    const keys = meta.keys || [meta.key];
     for (let key of keys) {
       const service = new extensionContext.services.ItemsService(
-        context.collection,
+        meta.collection,
         {
           schema,
         }
@@ -20,7 +20,7 @@ module.exports = async (router, extensionContext, utils) => {
           lower: true,
         });
         await service.updateOne(key, { slug });
-        console.log(`Updated slug of ${context.collection} ${key} to ${slug}`);
+        console.log(`Updated slug of ${meta.collection} ${key} to ${slug}`);
       }
     }
   };
@@ -71,9 +71,9 @@ module.exports = async (router, extensionContext, utils) => {
     notFound: {
       view: "404.njk",
     },
-    hooks: {
-      "items.create": slugify,
-      "items.update": slugify,
+    hooks: (hooks) => {
+      hooks.action("items.create", slugify);
+      hooks.action("items.update", slugify);
     },
     // Any other custom values
     // The entire config object is passed to all templates
