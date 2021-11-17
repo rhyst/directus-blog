@@ -225,25 +225,30 @@ const endpoint: Endpoint = async (router, extensionContext) => {
         });
         const toString = compile(urlPattern);
         getParamCombos(values).forEach(async (params) => {
-          if (params[pageParam]) {
-            let { filter_count } = await metaService.getMetaForQuery(
-              collection,
-              {
-                limit: route.limit || -1,
-                filter: getFilters(route, params),
-                meta: ["filter_count"],
+          try {
+            if (params[pageParam]) {
+              let { filter_count } = await metaService.getMetaForQuery(
+                collection,
+                {
+                  limit: route.limit || -1,
+                  filter: getFilters(route, params),
+                  meta: ["filter_count"],
+                }
+              );
+              const totalPages = Math.ceil(filter_count / (route.limit || -1));
+              for (let page = 1; page <= totalPages; page++) {
+                const paramsWithPage = { ...params, [pageParam]: page };
+                const url = toString(paramsWithPage);
+                render(route, { url, params: paramsWithPage });
               }
-            );
-            const totalPages = Math.ceil(filter_count / (route.limit || -1));
-            for (let page = 1; page <= totalPages; page++) {
-              const paramsWithPage = { ...params, [pageParam]: page };
-              const url = toString(paramsWithPage);
-              render(route, { url, params: paramsWithPage });
+              params[pageParam] = "";
             }
-            params[pageParam] = "";
+            const url = toString(params);
+            render(route, { url, params });
+          } catch (e) {
+            error("Error caching item", e);
+            error("Params", params);
           }
-          const url = toString(params);
-          render(route, { url, params });
         });
       });
     } catch (e) {
@@ -252,8 +257,10 @@ const endpoint: Endpoint = async (router, extensionContext) => {
   };
 
   if (config.cache !== false) {
-    log("Warming caches");
-    config.routes.forEach((route) => renderRoute(route));
+    setTimeout(() => {
+      log("Warming caches");
+      config.routes.forEach((route) => renderRoute(route));
+    }, 5000);
   }
 
   // HOOKS
