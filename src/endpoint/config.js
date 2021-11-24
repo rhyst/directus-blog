@@ -6,21 +6,23 @@ module.exports = async (router, extensionContext, utils) => {
   const schema = await extensionContext.getSchema();
 
   const slugify = async (meta) => {
-    const keys = meta.keys || [meta.key];
-    for (let key of keys) {
-      const service = new extensionContext.services.ItemsService(
-        meta.collection,
-        {
-          schema,
+    if (meta.collection === "post") {
+      const keys = meta.keys || [meta.key];
+      for (let key of keys) {
+        const service = new extensionContext.services.ItemsService(
+          meta.collection,
+          {
+            schema,
+          }
+        );
+        const item = await service.readOne(key);
+        if (item.name && !item.slug) {
+          const slug = utils.slugify(`${item.date}-${item.name}`, {
+            lower: true,
+          });
+          await service.updateOne(key, { slug });
+          console.log(`Updated slug of ${meta.collection} ${key} to ${slug}`);
         }
-      );
-      const item = await service.readOne(key);
-      if (item.name && !item.slug) {
-        const slug = utils.slugify(`${item.date}-${item.name}`, {
-          lower: true,
-        });
-        await service.updateOne(key, { slug });
-        console.log(`Updated slug of ${meta.collection} ${key} to ${slug}`);
       }
     }
   };
