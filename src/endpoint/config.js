@@ -38,6 +38,7 @@ module.exports = async (router, extensionContext, utils) => {
         filters: { published: { _eq: true }, indexed: { _eq: true } },
         beforeResponse: (_, __, res) =>
           res.setHeader("content-type", "application/atom+xml"),
+        minify: false,
       },
       {
         view: "index.njk",
