@@ -70,6 +70,28 @@ module.exports = async (router, extensionContext, utils) => {
         filters: { published: { _eq: false } },
         auth: true,
       },
+      {
+        view: "tags.njk",
+        url: ["/tags", "/tags/:page(\\d{0,})"],
+        limit: 10,
+        query: async (route, req) => {
+          const page = req.params.page || 1;
+          const db = extensionContext.database;
+          const totalRows = await db.raw(
+            "select count(*) as count from (SELECT count(*) from post join json_each(post.tags) as tag group by tag.value) as rows"
+          );
+          const totalPages = Math.ceil(totalRows.pop().count / route.limit);
+          // Get paginated as parameterised query so we're not passing the query param "page" directly into sql
+          const tags = await db
+            .from("post")
+            .select(db.raw("count(*) as count, tag.value"))
+            .joinRaw("join json_each(post.tags) as tag")
+            .groupBy("tag.value")
+            .limit(route.limit)
+            .offset((page - 1) * route.limit);
+          return { items: tags, totalPages };
+        },
+      },
     ],
     notFound: {
       view: "404.njk",
