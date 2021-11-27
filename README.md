@@ -6,7 +6,7 @@ A directus extension to add a blog endpoint. It aims to be simple to configure f
 
 ### Install
 
-Compatible with Directus 9.0.x.
+Compatible with Directus 9.x.x.
 
 Install the extension by downloading the release archive and unzipping it into your directus extensions folders:
 
@@ -48,6 +48,7 @@ Configuration is done in `config.js`. The options are:
 | `filter`         | `req => Directus filter object`                |                                       | Complete replace the default filter query                                                                                                                                               |
 | `auth`           | `boolean`                                      | `false`                               | Require a valid directus login cookie to view this route.                                                                                                                               |
 | `minify`         | `boolean`                                      | `true`                                | Disable html minification by setting this to false                                                                                                                                      |
+| `query`          | `(route, req) => ({items, totalPages})`        |                                       | Callback to completely replace the query made for this route.                                                                                                                           |
 | `beforeQuery`    | `(query, req) => void`                         |                                       | Callback before a directus query is made to modify the query if necessary                                                                                                               |
 | `beforeRender`   | `(items, req) => void`                         |                                       | Callback before nunjucks rendering to modify the item data if necessary.                                                                                                                |
 | `beforeResponse` | `(req, res) => void`                           |                                       | Callback before express response to modify the response if necessary.                                                                                                                   |

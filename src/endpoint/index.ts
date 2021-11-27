@@ -20,6 +20,10 @@ type RouteConfig = {
   filter?: (req: Express.Request) => Record<string, unknown>;
   minify?: boolean;
   // events
+  query?: (
+    route: RouteConfig,
+    req: Express.Request
+  ) => { items: Record<string, unknown>[]; totalPages: number };
   beforeQuery?: (query: Record<string, unknown>, req: Express.Request) => void;
   beforeRender?: (item: Record<string, unknown>, req: Express.Request) => void;
   beforeResponse?: (
@@ -107,8 +111,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
 
   // RENDERING
 
-  const render = async (route: RouteConfig, req) => {
-    log(`Rendering ${req.url}`);
+  const defaultQuery = async (route, req) => {
     const collection = route.collection || config.collection;
     const itemService = new ItemsService(collection, { schema });
     const page = req.params[pageParam] || 1;
@@ -128,7 +131,14 @@ const endpoint: Endpoint = async (router, extensionContext) => {
     if (req.params[pageParam] && req.params[pageParam] > totalPages) {
       return null;
     }
-    let items = await itemService.readByQuery(query);
+    const items = await itemService.readByQuery(query);
+    return { items, totalPages };
+  };
+
+  const render = async (route: RouteConfig, req) => {
+    log(`Rendering ${req.url}`);
+    const page = req.params[pageParam] || 1;
+    let { items, totalPages } = await (route.query || defaultQuery)(route, req);
     if (!items?.length) return null;
     route?.beforeRender?.(items, req);
     const item = items.length === 1 ? items[0] : null;
@@ -141,6 +151,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
         totalPages,
         config,
         route,
+        req,
       })
     );
     if (config.cache !== false) {
@@ -257,10 +268,8 @@ const endpoint: Endpoint = async (router, extensionContext) => {
   };
 
   if (config.cache !== false) {
-    setTimeout(() => {
-      log("Warming caches");
-      config.routes.forEach((route) => renderRoute(route));
-    }, 5000);
+    log("Warming caches");
+    config.routes.forEach((route) => renderRoute(route));
   }
 
   // HOOKS

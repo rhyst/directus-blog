@@ -1,0 +1,44 @@
+{% extends "partials/base.njk" %}
+
+{% block body %}
+  <h2 class="index-title">Tags</h2>
+
+  <section class="posts">
+    <ul>
+      {% for item in items %}
+        <li>
+          <a href="{{ config.baseUrl }}/tags/{{ item.value }}">{{ item.value | title }}</a> - {{ item.count }} posts</li>
+      {% else %}
+        <p>No tags</p>
+      {% endfor %}
+    </ul>
+
+    {% if items.length %}
+      <ul class="pagination">
+        <li class="{{ 'hide' if page === 1 else '' }}">
+          <a href="{{ config.baseUrl }}/tags/1" class="page-link" aria-label="First">
+            <span>««</span>
+          </a>
+        </li>
+        <li class="{{ 'hide' if page === 1 else '' }}">
+          <a href="{{ config.baseUrl }}/tags/{{ page - 1 }}" class="page-link" aria-label="Previous">
+            <span>«</span>
+          </a>
+        </li>
+        <li class="page-item">
+          {{ page }}/{{ totalPages }}
+        </li>
+        <li class="{{ '' if page !== totalPages and totalPages !== 1  else 'hide' }}">
+          <a href="{{ config.baseUrl }}/tags/{{ page + 1 }}" class="page-link" aria-label="Next">
+            <span>»</span>
+          </a>
+        </li>
+        <li class="{{ '' if page !== totalPages and totalPages !== 1  else 'hide' }}">
+          <a href="{{ config.baseUrl }}/tags/{{ totalPages }}" class="page-link" aria-label="Last">
+            <span>»»</span>
+          </a>
+        </li>
+      </ul>
+    {% endif %}
+  </section>
+{% endblock %}
