@@ -46,6 +46,7 @@ type Config = {
   hooks: (hooks: { filter; action; init; schedule }) => void;
   cache: boolean;
   pageParam: string;
+  contentSecurityPolicy?: string;
   [key: string]: unknown;
 };
 
@@ -328,6 +329,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
   router.use(compression());
 
   router.use((req, res, next) => {
+    res.set("content-security-policy", config.contentSecurityPolicy || "");
     try {
       next();
     } catch (e) {
