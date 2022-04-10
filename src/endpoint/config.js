@@ -105,5 +105,6 @@ module.exports = async (router, extensionContext, utils) => {
     title: "My Site", // Website title for HTML title tag
     authorName: "", // For default RSS template
     authorEmail: "", // For default RSS template
+    contentSecurityPolicy: "",
   };
 };
