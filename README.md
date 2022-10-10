@@ -87,7 +87,7 @@ You can also specify the operator to use with modified express syntax. If you ha
 }
 ```
 
-Any parameter of the format `<field>_<operator>` will be split this way and you can use any directus filter operator (though it may not produce sensible results).
+Any parameter of the format `<field>_<operator>` will be split this way and you can use any directus filter operator (though it may not produce sensible results). Note that the `_contains` operator will not work with JSON fields so you should make tag fields CSV fields. 
 
 ### Pagination
 
