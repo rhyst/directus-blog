@@ -77,19 +77,18 @@ module.exports = async (router, extensionContext, utils) => {
         query: async (route, req) => {
           const page = req.params.page || 1;
           const db = extensionContext.database;
-          const totalRows = await db.raw(
-            "select count(*) as count from (SELECT count(*) from post join json_each(post.tags) as tag group by tag.value) as rows"
+          // Get number of unique tags using some horrible sqlite to split the csv column
+          const result = await db.raw(
+            "SELECT count(*) as count FROM (WITH split(word, csv) AS (SELECT '', tags||',' FROM post WHERE published=true and indexed=true UNION ALL SELECT substr(csv, 0, instr(csv, ',')),  substr(csv, instr(csv, ',') + 1) FROM split WHERE csv != '' ) SELECT count(*), word FROM split WHERE word!='' GROUP BY WORD);"
+          )
+          const totalRows = result[0].count;
+          const totalPages = Math.ceil(totalRows / route.limit);
+          // Get unique tags with count of articles using some horrible sqlite to split the csv column
+          const items = await db.raw(
+            "WITH split(word, csv) AS (SELECT '', tags||',' FROM post WHERE published=true and indexed=true UNION ALL SELECT substr(csv, 0, instr(csv, ',')),  substr(csv, instr(csv, ',') + 1) FROM split WHERE csv != '' ) SELECT count(*) as count, word as value FROM split WHERE word!='' GROUP BY word limit ? offset ?;",
+            [route.limit, page-1]
           );
-          const totalPages = Math.ceil(totalRows.pop().count / route.limit);
-          // Get paginated as parameterised query so we're not passing the query param "page" directly into sql
-          const tags = await db
-            .from("post")
-            .select(db.raw("count(*) as count, tag.value"))
-            .joinRaw("join json_each(post.tags) as tag")
-            .groupBy("tag.value")
-            .limit(route.limit)
-            .offset((page - 1) * route.limit);
-          return { items: tags, totalPages };
+          return { items, totalPages };
         },
       },
     ],

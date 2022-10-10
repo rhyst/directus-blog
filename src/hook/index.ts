@@ -10,8 +10,12 @@ const log = (text: string) => {
 };
 
 const hook = (hooks): void => {
-  log("setting up hooks");
-  global.hooks = hooks;
+  if (!global.hooks) {
+    log("setting up hooks");
+    global.hooks = hooks;
+  } else {
+    log("hooks already set up");
+  }
 };
 
 export default hook;
