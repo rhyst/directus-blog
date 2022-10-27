@@ -105,5 +105,10 @@ module.exports = async (router, extensionContext, utils) => {
     authorName: "", // For default RSS template
     authorEmail: "", // For default RSS template
     contentSecurityPolicy: "",
+    tocOptions: { // Options for generating table of contents
+      ordered: false,
+      tocClass: 'toc',
+      maxLevel: 9999
+    }
   };
 };
