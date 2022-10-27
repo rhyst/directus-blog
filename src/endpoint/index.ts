@@ -3,6 +3,7 @@ import { static as expressStatic } from "express";
 import nunjucks from "nunjucks";
 import mcache from "memory-cache";
 import showdown from "showdown";
+import { Options as TocOptions, showdownToc} from './toc';
 import { defineEndpoint } from "@directus/extensions-sdk";
 import slugify from "slugify";
 import { minify } from "html-minifier-terser";
@@ -47,12 +48,11 @@ type Config = {
   cache: boolean;
   pageParam: string;
   contentSecurityPolicy?: string;
+  tocOptions?: TocOptions;
   [key: string]: unknown;
 };
 
 type Endpoint = ReturnType<typeof defineEndpoint>;
-
-const converter = new showdown.Converter();
 
 const log = (text: string, object?: any, emoji: string = "📜") => {
   const now = new Date();
@@ -75,6 +75,9 @@ const endpoint: Endpoint = async (router, extensionContext) => {
     slugify,
   })) as Config;
   log(`${config.extensionName} extension loading`);
+
+  const converter = new showdown.Converter({ extensions: [showdownToc(config.tocOptions ?? {})] });
+
   const pageParam = config.pageParam || "page";
 
   const { ItemsService, MetaService, AuthenticationService } =

@@ -36,7 +36,10 @@ Configuration is done in `config.js`. The options are:
 | `pageParam`             | `string`                                  | `'page'`             | Set the paramter that is treated as the numeric page parameter                                                                                                               |
 | `contentSecurityPolicy` | `string`                                  | `''`                 | Set the Content-Security-Header policy for the blog. Directus sets a restrictive policy which is unneccesary for a static blog so this by default overwrites it to be blank. |
 | `nunjucks`              | `(nunjucks, nunjucksEnv, config) => void` |                      | Callback to allow modifying the nunjucks environment                                                                                                                         |
+| `tocOptions`            | `TocOptions`                              |                      | Table of contents configuration options.                                                                                                                                     |
 | `*`                     | `*`                                       |                      | The entire config object (including custom properties) is passed to templates                                                                                                |
+
+The `RouteConfig` options are:
 
 | Option           | Type                                           | Default                               | Description                                                                                                                                                                             |
 | ---------------- | ---------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -54,6 +57,16 @@ Configuration is done in `config.js`. The options are:
 | `beforeRender`   | `(items, req) => void`                         |                                       | Callback before nunjucks rendering to modify the item data if necessary.                                                                                                                |
 | `beforeResponse` | `(req, res) => void`                           |                                       | Callback before express response to modify the response if necessary.                                                                                                                   |
 | `*`              | `*`                                            |                                       | The route config object (including custom properties) is passed to templates                                                                                                            |
+
+
+The `TocOptions` options are:
+
+| Option     | Type      | Default | Description                                                            |
+| ---------- | --------- | ------- | ---------------------------------------------------------------------- |
+| `ordered`  | `boolean` | `false` | Use `ol` tags instead of `ul` tags for the list.                       |
+| `tocClass` | `string`  | `toc`   | The class that is applied to the top level table of contents list tag. |
+| `maxLevel` | `number`  | `9999`  | Maximum header depth                                                   |
+
 
 After any configuration change it is necessary to restart directus (there is no way to reload just the extension yet).
 
@@ -155,7 +168,11 @@ The views are rendered nunjucks templates. The parameters available to each temp
 - `page` - The page number that was requested for this page
 - `totalPages` - The totalNumber of pages that the query produced
 
-All standard nunjucks filters and methods are available. In addition is the `md` filter which converts markdown to html (using showdown) and also allows you to use nunjucks within your content (which is acceptable for a personal blog but not for untrusted content).
+All standard nunjucks filters and methods are available.
+
+In addition is the `md` filter which converts markdown to html (using showdown) and also allows you to use nunjucks within your content (which is acceptable for a personal blog but not for untrusted content).
+
+Also placing the text `[toc]` on its own line will generate a table of contents based on the header tags that follow it. If more than one `[toc]` is placed in the same document then they generate a table of contents up until the next `[toc]` or the end of the document.
 
 You can configure the nunjucks environment using the `config.nunjucks(nunjucksModules, nunjucksEnv, config)` callback.
 
