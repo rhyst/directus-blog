@@ -6,13 +6,12 @@ A directus extension to add a blog endpoint. It aims to be simple to configure f
 
 ### Install
 
-Compatible with Directus 9.x.x.
+Compatible with Directus 10.x.x.
 
 Install the extension by downloading the release archive and unzipping it into your directus extensions folders:
 
-- Copy `endpoints/blog/index.js` to `<directus_root>/extensions/endpoints/blog/index.js`
-- Copy `endpoints/blog/config.js` to `<directus_root>/extensions/endpoints/blog/config.js`
-- Copy `hooks/blog/index.js` to `<directus_root>/extensions/hooks/blog/index.js`
+- Copy `endpoint/*` to `<directus_root>/extensions/endpoints/blog/`
+- Copy `hook/*` to `<directus_root>/extensions/hooks/blog/`
 
 Then restart directus.
 
