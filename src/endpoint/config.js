@@ -2,7 +2,7 @@ const nunjucks = (nunjucks, env) => {
   env.addGlobal("customFunction", () => "hello world");
 };
 
-module.exports = async (router, extensionContext, utils) => {
+const config = async (router, extensionContext, utils) => {
   const schema = await extensionContext.getSchema();
 
   const slugify = async (meta) => {
@@ -112,3 +112,5 @@ module.exports = async (router, extensionContext, utils) => {
     }
   };
 };
+
+export default config;

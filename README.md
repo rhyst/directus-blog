@@ -6,7 +6,7 @@ A directus extension to add a blog endpoint. It aims to be simple to configure f
 
 ### Install
 
-Compatible with Directus 9.x.x.
+Compatible with Directus 10.x.x.
 
 Install the extension by downloading the release archive and unzipping it into your directus extensions folders:
 

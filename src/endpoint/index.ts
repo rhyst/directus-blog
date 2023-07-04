@@ -1,67 +1,37 @@
-import path from "path";
-import { static as expressStatic } from "express";
-import nunjucks from "nunjucks";
-import mcache from "memory-cache";
-import showdown from "showdown";
-import { Options as TocOptions, showdownToc} from './toc';
-import { defineEndpoint } from "@directus/extensions-sdk";
-import slugify from "slugify";
-import { minify } from "html-minifier-terser";
+import type { Config, RouteConfig } from "../types.d.ts";
+import {
+  NextFunction,
+  Request,
+  Response,
+  static as expressStatic,
+} from "express";
+import { compile, parse } from "path-to-regexp";
+
 import compression from "compression";
-import { parse, compile } from "path-to-regexp";
+import { defineEndpoint } from "@directus/extensions-sdk";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import mcache from "memory-cache";
+import { minify } from "html-minifier-terser";
+import nunjucks from "nunjucks";
+import path from "path";
+import showdown from "showdown";
+import { showdownToc } from "./toc";
+import slugify from "slugify";
 
-type RouteConfig = {
-  url: string;
-  view: string;
-  collection?: string;
-  limit?: number;
-  sort?: { column: string; order: "desc" | "asc" }[];
-  fields?: string[];
-  filters?: Record<string, unknown>;
-  filter?: (req: Express.Request) => Record<string, unknown>;
-  minify?: boolean;
-  // events
-  query?: (
-    route: RouteConfig,
-    req: Express.Request
-  ) => { items: Record<string, unknown>[]; totalPages: number };
-  beforeQuery?: (query: Record<string, unknown>, req: Express.Request) => void;
-  beforeRender?: (item: Record<string, unknown>, req: Express.Request) => void;
-  beforeResponse?: (
-    body: string,
-    req: Express.Request,
-    res: Express.Response
-  ) => void;
-  [key: string]: unknown;
-};
+declare type NunjucksModule = typeof import("nunjucks");
 
-type Config = {
-  extensionName: string;
-  baseUrl: string;
-  staticUrl?: string;
-  staticDir?: string;
-  collection?: string;
-  nunjucks?: (nunjucks, env, config: Config) => void;
-  routes: RouteConfig[];
-  notFound: RouteConfig;
-  hooks: (hooks: { filter; action; init; schedule }) => void;
-  cache: boolean;
-  pageParam: string;
-  contentSecurityPolicy?: string;
-  tocOptions?: TocOptions;
-  [key: string]: unknown;
-};
-
-type Endpoint = ReturnType<typeof defineEndpoint>;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const log = (text: string, object?: any, emoji: string = "📜") => {
+  const upperText =
+    text?.length > 0 ? `${text[0]!.toUpperCase()}${text.slice(1)}` : "";
   const now = new Date();
   console.log(
     `${("0" + now.getHours()).slice(-2)}:${("0" + now.getMinutes()).slice(
       -2
-    )}:${("0" + now.getSeconds()).slice(
-      -2
-    )} ${emoji} ${text[0].toUpperCase()}${text.slice(1)}`
+    )}:${("0" + now.getSeconds()).slice(-2)} ${emoji} ${upperText}`
   );
   if (object) {
     console.log(object);
@@ -70,13 +40,18 @@ const log = (text: string, object?: any, emoji: string = "📜") => {
 
 const error = (text: string, object?: any) => log(text, object, "🚨");
 
-const endpoint: Endpoint = async (router, extensionContext) => {
-  const config = (await require("./config")(router, extensionContext, {
+export default defineEndpoint(async (router, extensionContext) => {
+  const config = (await (
+    await import(__dirname + "/config.js")
+  ).default(router, extensionContext, {
     slugify,
-  })) as Config;
-  log(`${config.extensionName} extension loading`);
+  })) as unknown as Config;
 
-  const converter = new showdown.Converter({ extensions: [showdownToc(config.tocOptions ?? {})] });
+  log(`Starting ${config.extensionName} extension`, null, "🚀");
+
+  const converter = new showdown.Converter({
+    extensions: [showdownToc(config.tocOptions ?? {})],
+  });
 
   const pageParam = config.pageParam || "page";
 
@@ -90,10 +65,10 @@ const endpoint: Endpoint = async (router, extensionContext) => {
 
   // COMMON
 
-  const getFilters = (route, params) => ({
+  const getFilters = (route: RouteConfig, params: Record<string, any>) => ({
     ...(route.filters || {}),
     ...Object.entries(params).reduce((filter, [key, value]) => {
-      const field = key.split("_")[0];
+      const field = key.split("_")[0]!;
       const match = key.split("_")[1];
       if (field === pageParam) return filter;
       return { ...filter, [field]: { [`_${match || "eq"}`]: value } };
@@ -115,7 +90,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
 
   // RENDERING
 
-  const defaultQuery = async (route, req) => {
+  const defaultQuery = async (route: RouteConfig, req: Request) => {
     const collection = route.collection || config.collection;
     const itemService = new ItemsService(collection, { schema });
     const page = req.params[pageParam] || 1;
@@ -132,14 +107,17 @@ const endpoint: Endpoint = async (router, extensionContext) => {
       meta: ["filter_count"],
     });
     const totalPages = Math.ceil(filter_count / (route.limit || -1));
-    if (req.params[pageParam] && req.params[pageParam] > totalPages) {
-      return null;
+    if (
+      req.params[pageParam] &&
+      parseInt(req.params[pageParam]!, 10) > totalPages
+    ) {
+      return { items: [], totalPages };
     }
     const items = await itemService.readByQuery(query);
     return { items, totalPages };
   };
 
-  const render = async (route: RouteConfig, req) => {
+  const render = async (route: RouteConfig, req: Request) => {
     log(`Rendering ${req.url}`);
     const page = req.params[pageParam] || 1;
     let { items, totalPages } = await (route.query || defaultQuery)(route, req);
@@ -188,7 +166,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
       params: { key: string; values: string[] }[]
     ): { [key: string]: string }[] => {
       if (params.length === 1) {
-        return params[0].values.map((val) => ({ [params[0].key]: val }));
+        return params[0]!.values.map((val) => ({ [params[0]!.key]: val }));
       }
       for (let i = 0; i < params.length; i++) {
         const urlPartials = f(params.slice(1));
@@ -290,48 +268,52 @@ const endpoint: Endpoint = async (router, extensionContext) => {
   /**
    * Uses provided hooks extension to integrate hooks into this extension
    */
-  config.hooks(global.hooks);
+  if (global.hooks) {
+    config.hooks(global.hooks);
 
-  global.hooks.action("items.create", async (meta) => {
-    log("Item create hook received");
-    if (config.cache !== false) {
-      await invalidateCache(meta);
-    }
-  });
-  global.hooks.action("items.update", async (meta) => {
-    log("Item update hook received");
-    if (config.cache !== false) {
-      await invalidateCache(meta);
-    }
-  });
+    global.hooks.action("items.create", async (meta) => {
+      log("Item create hook received");
+      if (config.cache !== false) {
+        await invalidateCache(meta);
+      }
+    });
+    global.hooks.action("items.update", async (meta) => {
+      log("Item update hook received");
+      if (config.cache !== false) {
+        await invalidateCache(meta);
+      }
+    });
+  }
 
   // AUTH
-  const auth = (route) => async (req, res, next) => {
-    if (route.auth) {
-      // First check we are authed on directus
-      if (!req.cookies.directus_refresh_token) {
-        const authService = new AuthenticationService({ schema });
-        try {
-          const auth = await authService.refresh(
-            req.cookies.directus_refresh_token
-          );
-          res.cookie("directus_refresh_token", auth.refreshToken, {
-            maxAge: auth.expires,
-            httpOnly: true,
-          });
-          next();
-        } catch (e) {
-          return res.send(403);
+  const auth =
+    (route: RouteConfig) =>
+    async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+      if (route.auth) {
+        // First check we are authed on directus
+        if (!req.cookies.directus_refresh_token) {
+          const authService = new AuthenticationService({ schema });
+          try {
+            const auth = await authService.refresh(
+              req.cookies.directus_refresh_token
+            );
+            res.cookie("directus_refresh_token", auth.refreshToken, {
+              maxAge: auth.expires,
+              httpOnly: true,
+            });
+            next();
+          } catch (e) {
+            return res.send(403);
+          }
         }
       }
-    }
-    next();
-  };
+      next();
+    };
 
   // ROUTES
   router.use(compression());
 
-  router.use((req, res, next) => {
+  router.use((_, res, next) => {
     res.set("content-security-policy", config.contentSecurityPolicy || "");
     try {
       next();
@@ -343,7 +325,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
 
   config.routes.forEach((route) => {
     router.get(route.url, auth(route), async (req, res, next) => {
-      const body = mcache.get(req.url) || (await render(route, req));
+      const body = (await mcache.get(req.url)) || (await render(route, req));
       route.beforeResponse?.(body, req, res);
       if (!body) return next();
       return res.send(body);
@@ -355,7 +337,7 @@ const endpoint: Endpoint = async (router, extensionContext) => {
     expressStatic(config.staticDir || path.join(__dirname, "static"))
   );
 
-  router.use((req, res, next) => {
+  router.use((req, res) => {
     error(`Page not found ${req.url}`);
     res.status(404).send(
       nunjucks.render(config.notFound.view, {
@@ -363,6 +345,4 @@ const endpoint: Endpoint = async (router, extensionContext) => {
       })
     );
   });
-};
-
-export default endpoint;
+});
