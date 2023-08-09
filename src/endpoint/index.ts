@@ -119,27 +119,35 @@ export default defineEndpoint(async (router, extensionContext) => {
 
   const render = async (route: RouteConfig, req: Request) => {
     log(`Rendering ${req.url}`);
-    const page = req.params[pageParam] || 1;
-    let { items, totalPages } = await (route.query || defaultQuery)(route, req);
-    if (!items?.length) return null;
-    route?.beforeRender?.(items, req);
-    const item = items.length === 1 ? items[0] : null;
-    const body = min(
-      route,
-      nunjucks.render(route.view, {
-        item,
-        items,
-        page,
-        totalPages,
-        config,
+    try {
+      const page = req.params[pageParam] || 1;
+      let { items, totalPages } = await (route.query || defaultQuery)(
         route,
-        req,
-      })
-    );
-    if (config.cache !== false) {
-      mcache.put(req.url, body);
+        req
+      );
+      if (!items?.length) return null;
+      route?.beforeRender?.(items, req);
+      const item = items.length === 1 ? items[0] : null;
+      const body = min(
+        route,
+        nunjucks.render(route.view, {
+          item,
+          items,
+          page,
+          totalPages,
+          config,
+          route,
+          req,
+        })
+      );
+      if (config.cache !== false) {
+        mcache.put(req.url, body);
+      }
+      return body;
+    } catch (e) {
+      error("Error rendering page", e);
+      return "";
     }
-    return body;
   };
 
   // NUNJUCKS
@@ -288,7 +296,11 @@ export default defineEndpoint(async (router, extensionContext) => {
   // AUTH
   const auth =
     (route: RouteConfig) =>
-    async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+    async (
+      req: Request,
+      res: Response,
+      next: NextFunction
+    ): Promise<Response | void> => {
       if (route.auth) {
         // First check we are authed on directus
         if (!req.cookies.directus_refresh_token) {
@@ -318,7 +330,7 @@ export default defineEndpoint(async (router, extensionContext) => {
     try {
       next();
     } catch (e) {
-      error(e);
+      error("An error occured", e);
       res.send("Error");
     }
   });
