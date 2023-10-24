@@ -2,6 +2,8 @@
 
 A directus extension to add a blog endpoint. It aims to be simple to configure for most personal blog use cases.
 
+Extra text
+
 ## Usage
 
 ### Install
