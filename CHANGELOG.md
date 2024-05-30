@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file. A "⚠️" 
 
 ### Changed
 
+- Minor change to extension definition to ensure its loaded on the correct subdomain in directus 10.11
+
+### Other
+
+## [2.0.0] - 2023-04-07
+
+### Changed
+
 - ⚠️ Config file is now a ES module not a CommonJS module
 - Updated dependencies
 

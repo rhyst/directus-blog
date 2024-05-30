@@ -2,7 +2,7 @@
 	"name": "directus-extension-blog",
 	"description": "A directus extension for hosting a blog",
 	"icon": "extension",
-	"version": "1.0.0",
+	"version": "2.0.1",
 	"keywords": [
 		"directus",
 		"directus-extension",
@@ -29,7 +29,7 @@
 		"start": "directus-extension build --no-minify && docker run --rm --name directus -p 8055:8055 -v $PWD/db:/directus/database -v $PWD/dist/endpoint:/directus/extensions/endpoints/blog -v $PWD/dist/hook:/directus/extensions/hooks/blog -e KEY=test -e SECRET=test -e ADMIN_EMAIL=admin@example.com -e ADMIN_PASSWORD=d1r3ctu5 directus/directus"
 	},
 	"devDependencies": {
-		"@directus/extensions-sdk": "10.1.5",
+		"@directus/extensions-sdk": "^11.0.6",
 		"@types/compression": "^1.7.2",
 		"@types/express": "^4.17.17",
 		"@types/html-minifier-terser": "^7.0.0",
